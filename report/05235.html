@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>Test Report</title>
+    <link href="assets/style.css" rel="stylesheet" type="text/css"/></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) { // eslint-disable-line no-redeclare
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function findAll(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sortColumn(elem) {
+    toggleSortStates(elem);
+    const colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    let key;
+    if (elem.classList.contains('result')) {
+        key = keyResult;
+    } else if (elem.classList.contains('links')) {
+        key = keyLink;
+    } else {
+        key = keyAlpha;
+    }
+    sortTable(elem, key(colIndex));
+}
+
+function showAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(showExtras);
+}
+
+function hideAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(hideExtras);
+}
+
+function showExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.remove('collapsed');
+    expandcollapse.classList.remove('expander');
+    expandcollapse.classList.add('collapser');
+}
+
+function hideExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.add('collapsed');
+    expandcollapse.classList.remove('collapser');
+    expandcollapse.classList.add('expander');
+}
+
+function showFilters() {
+    const filterItems = document.getElementsByClassName('filter');
+    for (let i = 0; i < filterItems.length; i++)
+        filterItems[i].hidden = false;
+}
+
+function addCollapse() {
+    // Add links for show/hide all
+    const resulttable = find('table#results-table');
+    const showhideall = document.createElement('p');
+    showhideall.innerHTML = '<a href="javascript:showAllExtras()">Show all details</a> / ' +
+                            '<a href="javascript:hideAllExtras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    findAll('.col-result').forEach(function(elem) {
+        const collapsed = getQueryParameter('collapsed') || 'Passed';
+        const extras = elem.parentNode.nextElementSibling;
+        const expandcollapse = document.createElement('span');
+        if (extras.classList.contains('collapsed')) {
+            expandcollapse.classList.add('expander');
+        } else if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add('collapsed');
+            expandcollapse.classList.add('expander');
+        } else {
+            expandcollapse.classList.add('collapser');
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener('click', function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains('collapsed')) {
+                showExtras(event.currentTarget);
+            } else {
+                hideExtras(event.currentTarget);
+            }
+        });
+    });
+}
+
+function getQueryParameter(name) {
+    const match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () { // eslint-disable-line no-unused-vars
+    resetSortHeaders();
+
+    addCollapse();
+
+    showFilters();
+
+    sortColumn(find('.initial-sort'));
+
+    findAll('.sortable').forEach(function(elem) {
+        elem.addEventListener('click',
+            function() {
+                sortColumn(elem);
+            }, false);
+    });
+}
+
+function sortTable(clicked, keyFunc) {
+    const rows = findAll('.results-table-row');
+    const reversed = !clicked.classList.contains('asc');
+    const sortedRows = sort(rows, keyFunc, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    const thead = document.getElementById('results-table-head');
+    document.getElementById('results-table').remove();
+    const parent = document.createElement('table');
+    parent.id = 'results-table';
+    parent.appendChild(thead);
+    sortedRows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName('BODY')[0].appendChild(parent);
+}
+
+function sort(items, keyFunc, reversed) {
+    const sortArray = items.map(function(item, i) {
+        return [keyFunc(item), i];
+    });
+
+    sortArray.sort(function(a, b) {
+        const keyA = a[0];
+        const keyB = b[0];
+
+        if (keyA == keyB) return 0;
+
+        if (reversed) {
+            return keyA < keyB ? 1 : -1;
+        } else {
+            return keyA > keyB ? 1 : -1;
+        }
+    });
+
+    return sortArray.map(function(item) {
+        const index = item[1];
+        return items[index];
+    });
+}
+
+function keyAlpha(colIndex) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[colIndex].firstChild.data.toLowerCase();
+    };
+}
+
+function keyLink(colIndex) {
+    return function(elem) {
+        const dataCell = elem.childNodes[1].childNodes[colIndex].firstChild;
+        return dataCell == null ? '' : dataCell.innerText.toLowerCase();
+    };
+}
+
+function keyResult(colIndex) {
+    return function(elem) {
+        const strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+            'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[colIndex].firstChild.data);
+    };
+}
+
+function resetSortHeaders() {
+    findAll('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    findAll('.sortable').forEach(function(elem) {
+        const icon = document.createElement('div');
+        icon.className = 'sort-icon';
+        icon.textContent = 'vvv';
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove('desc', 'active');
+        elem.classList.add('asc', 'inactive');
+    });
+}
+
+function toggleSortStates(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        resetSortHeaders();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function isAllRowsHidden(value) {
+    return value.hidden == false;
+}
+
+function filterTable(elem) { // eslint-disable-line no-unused-vars
+    const outcomeAtt = 'data-test-result';
+    const outcome = elem.getAttribute(outcomeAtt);
+    const classOutcome = outcome + ' results-table-row';
+    const outcomeRows = document.getElementsByClassName(classOutcome);
+
+    for(let i = 0; i < outcomeRows.length; i++){
+        outcomeRows[i].hidden = !elem.checked;
+    }
+
+    const rows = findAll('.results-table-row').filter(isAllRowsHidden);
+    const allRowsHidden = rows.length == 0 ? true : false;
+    const notFoundMessage = document.getElementById('not-found-message');
+    notFoundMessage.hidden = !allRowsHidden;
+}
+</script>
+    <h1>05235.html</h1>
+    <p>Report generated on 23-May-2022 at 17:47:38 by <a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a> v3.1.1</p>
+    <h2>Environment</h2>
+    <table id="environment">
+      <tr>
+        <td>Base URL</td>
+        <td></td></tr>
+      <tr>
+        <td>JAVA_HOME</td>
+        <td>/Library/Java/JavaVirtualMachines/jdk-18.0.1.jdk/Contents/Home</td></tr>
+      <tr>
+        <td>Packages</td>
+        <td>{"pluggy": "1.0.0", "py": "1.11.0", "pytest": "7.0.1"}</td></tr>
+      <tr>
+        <td>Platform</td>
+        <td>Darwin-21.1.0-x86_64-i386-64bit</td></tr>
+      <tr>
+        <td>Plugins</td>
+        <td>{"PyTestReport": "0.2.1", "allure-pytest": "2.9.45", "base-url": "1.4.2", "forked": "1.4.0", "html": "3.1.1", "metadata": "1.11.0", "ordering": "0.6", "rerunfailures": "10.2", "xdist": "2.5.0"}</td></tr>
+      <tr>
+        <td>Python</td>
+        <td>3.6.7</td></tr></table>
+    <h2>Summary</h2>
+    <p>3 tests ran in 2.87 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="passed">3 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="failed">0 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>, <input checked="true" class="filter" data-test-result="rerun" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="rerun">0 rerun</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable" col="name">Test</th>
+          <th class="sortable" col="duration">Duration</th>
+          <th class="sortable links" col="links">Links</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="4">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">case/register/test1/test_juben.py::test_getjuben</td>
+          <td class="col-duration">0.16</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>DEBUG    urllib3.connectionpool:connectionpool.py:1005 Starting new HTTPS connection (1): test-vlc-admin-api.kaikeba.com:443
+DEBUG    urllib3.connectionpool:connectionpool.py:465 https://test-vlc-admin-api.kaikeba.com:443 &quot;POST /program/list HTTP/1.1&quot; 200 None
+INFO     common.public:public.py:6 &lt;Response [200]&gt;
+INFO     common.public:public.py:6 {&#x27;code&#x27;: &#x27;00000&#x27;, &#x27;message&#x27;: &#x27;成功&#x27;, &#x27;path&#x27;: None, &#x27;data&#x27;: {&#x27;page&#x27;: 1, &#x27;size&#x27;: 1, &#x27;records&#x27;: [{&#x27;id&#x27;: 1649, &#x27;name&#x27;: &#x27;zp0520001&#x27;, &#x27;mediaName&#x27;: &#x27;2021-08-13-17-36-15_2021-08-13-17-48-55.mp4&#x27;, &#x27;chatFileName&#x27;: &#x27;600条剧本消息.csv&#x27;, &#x27;transCodeStatus&#x27;: 1, &#x27;hasGoods&#x27;: None, &#x27;hasMoney&#x27;: None, &#x27;duration&#x27;: 696465, &#x27;createTime&#x27;: &#x27;2022-05-20 19:10:38&#x27;, &#x27;updateTime&#x27;: &#x27;2022-05-20 19:15:20&#x27;, &#x27;createUserId&#x27;: 100008764, &#x27;createUserName&#x27;: &#x27;任泽鹏&#x27;, &#x27;updateUserId&#x27;: 100008764, &#x27;updateUserName&#x27;: &#x27;任泽鹏&#x27;, &#x27;programLabel&#x27;: {&#x27;businessName&#x27;: &#x27;SVU&#x27;, &#x27;businessId&#x27;: 15, &#x27;productName&#x27;: &#x27;Java后端&#x27;, &#x27;productId&#x27;: 1, &#x27;subProductName&#x27;: &#x27;zlj子产品线&#x27;, &#x27;subProductId&#x27;: 243, &#x27;spuName&#x27;: &#x27;women&#x27;, &#x27;spuId&#x27;: 1}, &#x27;type&#x27;: 2}], &#x27;pages&#x27;: 1, &#x27;total&#x27;: 1}, &#x27;traceId&#x27;: None, &#x27;timestamp&#x27;: 1653299258108, &#x27;ok&#x27;: True}<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">case/register/test2/test_qianrenqianmianlist.py::test_qianren_list</td>
+          <td class="col-duration">0.16</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>DEBUG    urllib3.connectionpool:connectionpool.py:1005 Starting new HTTPS connection (1): test-vlc-admin-api.kaikeba.com:443
+DEBUG    urllib3.connectionpool:connectionpool.py:465 https://test-vlc-admin-api.kaikeba.com:443 &quot;POST /operation/dramaLive/pageList HTTP/1.1&quot; 200 None
+INFO     common.public:public.py:6 &lt;Response [200]&gt;
+INFO     common.public:public.py:6 {&#x27;code&#x27;: &#x27;00000&#x27;, &#x27;message&#x27;: &#x27;成功&#x27;, &#x27;path&#x27;: None, &#x27;data&#x27;: {&#x27;page&#x27;: 1, &#x27;size&#x27;: 10, &#x27;records&#x27;: [{&#x27;id&#x27;: 1194, &#x27;name&#x27;: &#x27;自动化测试abc&#x27;, &#x27;duration&#x27;: &#x27;00:11:36&#x27;, &#x27;businessName&#x27;: &#x27;人才服务&#x27;, &#x27;productName&#x27;: &#x27;Java后端&#x27;, &#x27;subProductName&#x27;: &#x27;java2&#x27;, &#x27;spuName&#x27;: &#x27;产品&#x27;, &#x27;updateUserName&#x27;: &#x27;任泽鹏&#x27;, &#x27;updateTime&#x27;: &#x27;2022-05-23 17:42:01&#x27;, &#x27;type&#x27;: 2, &#x27;url&#x27;: &#x27;https://test-vlcplay.kaikeba.com/drama/live/1194&#x27;, &#x27;dramaLiveType&#x27;: 1, &#x27;startTime&#x27;: None, &#x27;endTime&#x27;: None, &#x27;liveStatus&#x27;: None}, {&#x27;id&#x27;: 1193, &#x27;name&#x27;: &#x27;自动化测试abc&#x27;, &#x27;duration&#x27;: &#x27;00:11:36&#x27;, &#x27;businessName&#x27;: &#x27;人才服务&#x27;, &#x27;productName&#x27;: &#x27;Java后端&#x27;, &#x27;subProductName&#x27;: &#x27;java2&#x27;, &#x27;spuName&#x27;: &#x27;产品&#x27;, &#x27;updateUserName&#x27;: &#x27;任泽鹏&#x27;, &#x27;updateTime&#x27;: &#x27;2022-05-23 17:41:48&#x27;, &#x27;type&#x27;: 2, &#x27;url&#x27;: &#x27;https://test-vlcplay.kaikeba.com/drama/live/1193&#x27;, &#x27;dramaLiveType&#x27;: 1, &#x27;startTime&#x27;: None, &#x27;endTime&#x27;: None, &#x27;liveStatus&#x27;: None}, {&#x27;id&#x27;: 1192, &#x27;name&#x27;: &#x27;自动化测试abc&#x27;, &#x27;duration&#x27;: &#x27;00:11:36&#x27;, &#x27;businessName&#x27;: &#x27;人才服务&#x27;, &#x27;productName&#x27;: &#x27;Java后端&#x27;, &#x27;subProductName&#x27;: &#x27;java2&#x27;, &#x27;spuName&#x27;: &#x27;产品&#x27;, &#x27;updateUserName&#x27;: &#x27;任泽鹏&#x27;, &#x27;updateTime&#x27;: &#x27;2022-05-23 17:40:19&#x27;, &#x27;type&#x27;: 2, &#x27;url&#x27;: &#x27;https://test-vlcplay.kaikeba.com/drama/live/1192&#x27;, &#x27;dramaLiveType&#x27;: 1, &#x27;startTime&#x27;: None, &#x27;endTime&#x27;: None, &#x27;liveStatus&#x27;: None}, {&#x27;id&#x27;: 1191, &#x27;name&#x27;: &#x27;自动化测试abc&#x27;, &#x27;duration&#x27;: &#x27;00:11:36&#x27;, &#x27;businessName&#x27;: &#x27;人才服务&#x27;, &#x27;productName&#x27;: &#x27;Java后端&#x27;, &#x27;subProductName&#x27;: &#x27;java2&#x27;, &#x27;spuName&#x27;: &#x27;产品&#x27;, &#x27;updateUserName&#x27;: &#x27;任泽鹏&#x27;, &#x27;updateTime&#x27;: &#x27;2022-05-23 17:39:47&#x27;, &#x27;type&#x27;: 2, &#x27;url&#x27;: &#x27;https://test-vlcplay.kaikeba.com/drama/live/1191&#x27;, &#x27;dramaLiveType&#x27;: 1, &#x27;startTime&#x27;: None, &#x27;endTime&#x27;: None, &#x27;liveStatus&#x27;: None}, {&#x27;id&#x27;: 1190, &#x27;name&#x27;: &#x27;自动化测试abc&#x27;, &#x27;duration&#x27;: &#x27;00:11:36&#x27;, &#x27;businessName&#x27;: &#x27;人才服务&#x27;, &#x27;productName&#x27;: &#x27;Java后端&#x27;, &#x27;subProductName&#x27;: &#x27;java2&#x27;, &#x27;spuName&#x27;: &#x27;产品&#x27;, &#x27;updateUserName&#x27;: &#x27;任泽鹏&#x27;, &#x27;updateTime&#x27;: &#x27;2022-05-23 17:38:52&#x27;, &#x27;type&#x27;: 2, &#x27;url&#x27;: &#x27;https://test-vlcplay.kaikeba.com/drama/live/1190&#x27;, &#x27;dramaLiveType&#x27;: 1, &#x27;startTime&#x27;: None, &#x27;endTime&#x27;: None, &#x27;liveStatus&#x27;: None}, {&#x27;id&#x27;: 1189, &#x27;name&#x27;: &#x27;J0523004&#x27;, &#x27;duration&#x27;: &#x27;00:00:15&#x27;, &#x27;businessName&#x27;: &#x27;SVU&#x27;, &#x27;productName&#x27;: &#x27;&#x27;, &#x27;subProductName&#x27;: &#x27;&#x27;, &#x27;spuName&#x27;: &#x27;&#x27;, &#x27;updateUserName&#x27;: &#x27;刘得佳&#x27;, &#x27;updateTime&#x27;: &#x27;2022-05-23 15:10:56&#x27;, &#x27;type&#x27;: 1, &#x27;url&#x27;: &#x27;https://test-vlcplay.kaikeba.com/drama/live/1189&#x27;, &#x27;dramaLiveType&#x27;: 1, &#x27;startTime&#x27;: None, &#x27;endTime&#x27;: None, &#x27;liveStatus&#x27;: None}, {&#x27;id&#x27;: 1187, &#x27;name&#x27;: &#x27;自动化测试abc&#x27;, &#x27;duration&#x27;: &#x27;00:11:36&#x27;, &#x27;businessName&#x27;: &#x27;人才服务&#x27;, &#x27;productName&#x27;: &#x27;Java后端&#x27;, &#x27;subProductName&#x27;: &#x27;java2&#x27;, &#x27;spuName&#x27;: &#x27;产品&#x27;, &#x27;updateUserName&#x27;: &#x27;任泽鹏&#x27;, &#x27;updateTime&#x27;: &#x27;2022-05-23 15:03:02&#x27;, &#x27;type&#x27;: 2, &#x27;url&#x27;: &#x27;https://test-vlcplay.kaikeba.com/drama/live/1187&#x27;, &#x27;dramaLiveType&#x27;: 1, &#x27;startTime&#x27;: None, &#x27;endTime&#x27;: None, &#x27;liveStatus&#x27;: None}, {&#x27;id&#x27;: 1185, &#x27;name&#x27;: &#x27;J0523002&#x27;, &#x27;duration&#x27;: &#x27;00:00:15&#x27;, &#x27;businessName&#x27;: &#x27;SVU&#x27;, &#x27;productName&#x27;: &#x27;&#x27;, &#x27;subProductName&#x27;: &#x27;&#x27;, &#x27;spuName&#x27;: &#x27;&#x27;, &#x27;updateUserName&#x27;: &#x27;刘得佳&#x27;, &#x27;updateTime&#x27;: &#x27;2022-05-23 14:59:50&#x27;, &#x27;type&#x27;: 1, &#x27;url&#x27;: &#x27;https://test-vlcplay.kaikeba.com/drama/live/1185&#x27;, &#x27;dramaLiveType&#x27;: 1, &#x27;startTime&#x27;: None, &#x27;endTime&#x27;: None, &#x27;liveStatus&#x27;: None}, {&#x27;id&#x27;: 1184, &#x27;name&#x27;: &#x27;J0523001&#x27;, &#x27;duration&#x27;: &#x27;00:00:15&#x27;, &#x27;businessName&#x27;: &#x27;SVU&#x27;, &#x27;productName&#x27;: &#x27;&#x27;, &#x27;subProductName&#x27;: &#x27;&#x27;, &#x27;spuName&#x27;: &#x27;&#x27;, &#x27;updateUserName&#x27;: &#x27;刘得佳&#x27;, &#x27;updateTime&#x27;: &#x27;2022-05-23 14:53:12&#x27;, &#x27;type&#x27;: 1, &#x27;url&#x27;: &#x27;https://test-vlcplay.kaikeba.com/drama/live/1184&#x27;, &#x27;dramaLiveType&#x27;: 1, &#x27;startTime&#x27;: None, &#x27;endTime&#x27;: None, &#x27;liveStatus&#x27;: None}, {&#x27;id&#x27;: 1177, &#x27;name&#x27;: &#x27;zp0520001&#x27;, &#x27;duration&#x27;: &#x27;00:02:06&#x27;, &#x27;businessName&#x27;: &#x27;人才服务&#x27;, &#x27;productName&#x27;: &#x27;Java后端&#x27;, &#x27;subProductName&#x27;: &#x27;java2&#x27;, &#x27;spuName&#x27;: &#x27;women&#x27;, &#x27;updateUserName&#x27;: &#x27;任泽鹏&#x27;, &#x27;updateTime&#x27;: &#x27;2022-05-20 19:12:18&#x27;, &#x27;type&#x27;: 2, &#x27;url&#x27;: &#x27;https://test-vlcplay.kaikeba.com/drama/live/1177&#x27;, &#x27;dramaLiveType&#x27;: 1, &#x27;startTime&#x27;: None, &#x27;endTime&#x27;: None, &#x27;liveStatus&#x27;: None}], &#x27;pages&#x27;: None, &#x27;total&#x27;: 818}, &#x27;traceId&#x27;: None, &#x27;timestamp&#x27;: 1653299258263, &#x27;ok&#x27;: True}<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">case/register/test2/test_showstudentdata.py::test_shoudata</td>
+          <td class="col-duration">0.16</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>DEBUG    urllib3.connectionpool:connectionpool.py:1005 Starting new HTTPS connection (1): test-vlc-admin-api.kaikeba.com:443
+DEBUG    urllib3.connectionpool:connectionpool.py:465 https://test-vlc-admin-api.kaikeba.com:443 &quot;POST /operation/dramaLive/userLearnList HTTP/1.1&quot; 200 None
+INFO     common.public:public.py:6 &lt;Response [200]&gt;
+INFO     common.public:public.py:6 {&#x27;code&#x27;: &#x27;00000&#x27;, &#x27;message&#x27;: &#x27;成功&#x27;, &#x27;path&#x27;: None, &#x27;data&#x27;: {&#x27;page&#x27;: 1, &#x27;size&#x27;: 10, &#x27;records&#x27;: [{&#x27;uid&#x27;: 70443025, &#x27;nickName&#x27;: &#x27;我姓任&#x27;, &#x27;phone&#x27;: &#x27;133****6993&#x27;, &#x27;startTime&#x27;: &#x27;2022-05-17 17:37:32&#x27;, &#x27;learn&#x27;: 11}, {&#x27;uid&#x27;: 10381843, &#x27;nickName&#x27;: &#x27;向前看。&#x27;, &#x27;phone&#x27;: &#x27;133****3331&#x27;, &#x27;startTime&#x27;: &#x27;2022-05-17 17:37:25&#x27;, &#x27;learn&#x27;: 11}], &#x27;pages&#x27;: None, &#x27;total&#x27;: 2}, &#x27;traceId&#x27;: None, &#x27;timestamp&#x27;: 1653299258446, &#x27;ok&#x27;: True}<br/></div></td></tr></tbody></table></body></html>
